@@ -2,6 +2,20 @@
 
 > A LiDAR-anchored quadrotor that localizes, maps and explores where satellite navigation cannot reach.
 
+<p align="center">
+  <img src="docs/images/ventra_hero.jpg" alt="VENTRA quadrotor" width="48%">
+  <img src="docs/images/corridor_flight_3d.jpg" alt="Corridor flight with live 3D reconstruction" width="48%">
+</p>
+<p align="center"><em>Left: the assembled vehicle with the RPLIDAR C1, orange 3D-printed mounts and carbon-fiber landing gear. Right: corridor flight with the live 3D reconstruction overlaid.</em></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/PX4-Autopilot-1f3a5f" alt="PX4">
+  <img src="https://img.shields.io/badge/ROS%202-Jazzy-22314E" alt="ROS 2 Jazzy">
+  <img src="https://img.shields.io/badge/Ubuntu-24.04-E95420" alt="Ubuntu 24.04">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB" alt="Python 3.12">
+  <img src="https://img.shields.io/badge/Raspberry%20Pi-5-C51A4A" alt="Raspberry Pi 5">
+</p>
+
 VENTRA is an S500-class quadrotor that flies **without GPS** in tunnels, mine shafts, wells, warehouses and other enclosed spaces. A **Pixhawk 6C running PX4** handles inner-loop control and EKF2 state estimation, while a **Raspberry Pi 5 running ROS 2 Jazzy** carries a 360° 2D LiDAR and a low-light camera and does mapping, localization, planning and the operator interfaces. The two are joined by PX4's **uXRCE-DDS** bridge.
 
 Optical flow on its own let EKF2's position reset over dim or plain floors. To fix that, VENTRA uses a **LiDAR-anchored localization chain**: RF2O scan-matching odometry plus SLAM Toolbox produce a map-frame pose, and that pose goes back into EKF2 as an **external-vision** measurement. On top of this sit Nav2 (A*), a custom frontier explorer, a braking-limited reactive-avoidance filter and stacked-section 3D mapping. A separate **SLAM-free shaft-inspection mode** handles vertical bores.
@@ -26,42 +40,19 @@ Optical flow on its own let EKF2's position reset over dim or plain floors. To f
 
 ## System Architecture
 
-```
-┌──────────────────────── Ground station (laptop) ────────────────────────┐
-│  RViz2 (map, TF, paths)  ·  QGroundControl  ·  browser → GCS / teleop    │
-└───────────────────────────────▲─────────────────────────────────────────┘
-                                │ Wi-Fi (ROS 2 DDS, HTTP, MJPEG)
-┌──────────── Companion computer: Raspberry Pi 5 (Ubuntu 24.04, ROS 2 Jazzy) ────────────┐
-│  RPLIDAR C1 driver ─/scan 10 Hz─► RF2O (odom→base_link, 20 Hz)                          │
-│                                  └► SLAM Toolbox (map→odom, loop closure)               │
-│  vision_odom_bridge: map→base_link ─► /fmu/in/vehicle_visual_odometry (10 Hz, FRD)      │
-│  odom_bridge_node:   /fmu/out/vehicle_odometry ─► /odom (ENU/FLU) + static laser TF     │
-│  Nav2 (A*) · frontier_explorer · reactive_avoidance · offboard bridge · shaft mission   │
-│  pose_3d_node + scan_3d_mapper (3D voxel map)  ·  drone_gcs.py :8080  ·  teleop :8000   │
-│  Micro XRCE-DDS Agent                                                                    │
-└───────────────────────────────▲─────────────────────────────────────────────────────────┘
-                                │ UART  /dev/ttyAMA0 ↔ TELEM2 @ 921600 baud (uXRCE-DDS)
-┌──────────────── Flight controller: Pixhawk 6C (PX4) ────────────────┐
-│  EKF2 (IMU, baro, optical flow, ToF range, external vision)          │
-│  Position / attitude / rate control → mixer → 4× ESC → 4× 920 KV     │
-│  Holybro H-Flow (CAN) · FlySky FS-iA6 (RC override) · 3DR telemetry  │
-└──────────────────────────────────────────────────────────────────────┘
-```
+VENTRA splits fast, safety-critical control from heavy autonomy. The Pixhawk 6C runs PX4 estimation and control and keeps the vehicle stable even if the companion computer stalls. The Raspberry Pi 5 runs perception, SLAM, pose fusion and autonomy in ROS 2. The uXRCE-DDS link (orange) carries PX4 odometry out, and external-vision poses and offboard setpoints in, over `/dev/ttyAMA0` ↔ TELEM2 at 921 600 baud.
+
+<p align="center"><img src="docs/images/system_architecture.png" alt="System architecture" width="95%"></p>
 
 ### Localization and autonomy pipeline
 
-```
-RPLIDAR C1 /scan ──► RF2O laser odometry ──odom→base_link──► SLAM Toolbox ──map→odom──┐
-                                                                                     ▼
-            PX4 EKF2 ◄── external vision (10 Hz, FRD) ◄── vision_odom_bridge (tf2: map→base_link)
-                                                                                     │
-  /map ──► Nav2 costmaps ──► A* planner + local controller ◄── frontier_explorer goals
-                                     │ /cmd_vel
-                                     ▼
-                         reactive_avoidance ──/cmd_vel_safe──► offboard bridge ──► PX4
-```
+RF2O and SLAM Toolbox anchor the pose to the map, and the vision bridge sends it back to EKF2 as external vision (thick orange arrow). The map drives Nav2 and the frontier explorer. Every velocity command passes through the reactive-avoidance filter before the offboard bridge sends it to PX4.
+
+<p align="center"><img src="docs/images/autonomy_pipeline.png" alt="Localization and autonomy pipeline" width="95%"></p>
 
 ### TF tree (REP 105)
+
+<p align="center"><img src="docs/images/tf_tree.png" alt="TF tree" width="55%"></p>
 
 Every TF edge has exactly one owner, because two publishers on the same edge corrupt the tree:
 
@@ -78,11 +69,41 @@ PX4 uses NED/FRD and ROS uses ENU/FLU. The bridges convert in both directions. T
 
 ## Operating Modes
 
+<p align="center"><img src="docs/images/mission_logic.png" alt="Mission logic of both modes" width="85%"></p>
+<p align="center"><em>Mission logic: (a) indoor exploration with Nav2 and the frontier explorer, (b) the shaft-inspection state machine. The dashed path is the abort branch.</em></p>
+
 ### 1. Indoor exploration
 1. Take off and wait for sensors to initialize (EKF2 healthy, `/scan` live).
 2. SLAM Toolbox builds a 2D occupancy map from the LiDAR scans.
 3. The frontier explorer picks the boundary between known free space and unknown space; Nav2 plans an A* path to it and the vehicle flies there while avoiding obstacles.
 4. When no reachable frontiers remain, the map is done at that altitude. Repeating at other altitudes adds horizontal sections to the 3D reconstruction.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/gcs_nav2.jpg" alt="GCS launcher and Nav2"></td>
+    <td width="50%"><img src="docs/images/frontier_exploration.jpg" alt="Frontier exploration"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>GCS launcher beside RViz2 with the Nav2 panel and a planned path</em></td>
+    <td align="center"><em>Frontier exploration of a corridor map</em></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/avoidance_before.jpg" alt="New obstacle appears"></td>
+    <td><img src="docs/images/avoidance_replan.jpg" alt="Nav2 re-plans"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>A new obstacle appears near the planned path…</em></td>
+    <td align="center"><em>…and Nav2 re-plans around it</em></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/pointcloud_3d.jpg" alt="Stacked LiDAR sections"></td>
+    <td><img src="docs/images/model_3d_rviz.jpg" alt="3D model in RViz2"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Stacked LiDAR sections forming a 3D point cloud of a corridor</em></td>
+    <td align="center"><em>The 3D model in RViz2</em></td>
+  </tr>
+</table>
 
 ### 2. Shaft and tunnel inspection (`shaft_inspection`)
 A vertical bore gives scan-matching SLAM almost nothing to work with along its axis, so this mode uses no SLAM:
@@ -96,6 +117,20 @@ A vertical bore gives scan-matching SLAM almost nothing to work with along its a
 | 3D map | Scans stacked at known depth, one slice per 5 cm |
 
 Mission sequence: hover over the shaft mouth → **OFFBOARD** → centre and set the depth datum → descend at 0.35 m/s while centred → brake from 2.5 m and turn around 0.5 m above the floor → climb at 0.5 m/s → stop at the datum height and hand back to the pilot. Outputs are a point cloud (`.pcd`) and a radius-vs-depth profile (`.csv`).
+
+<p align="center"><img src="docs/images/shaft_geometry.png" alt="Shaft inspection geometry" width="70%"></p>
+<p align="center"><em>(a) From each scan's wall points, the vehicle finds the point of maximum clearance <b>c</b> (the bore centre). The offset <b>e</b> drives the centring. (b) The vehicle descends while centred, records a section every 5 cm and turns around 0.5 m above the floor.</em></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/shaft_descent_sim.jpg" alt="Simulated shaft descent"></td>
+    <td width="50%"><img src="docs/images/shaft_reconstruction.jpg" alt="Shaft reconstruction"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Simulated descent with the dashboard and the growing 3D map</em></td>
+    <td align="center"><em>Completed 3D reconstruction and shaft profile</em></td>
+  </tr>
+</table>
 
 See [`src/shaft_inspection/README.md`](src/shaft_inspection/README.md) and [`src/shaft_inspection/docs/HARDWARE_GUIDE.md`](src/shaft_inspection/docs/HARDWARE_GUIDE.md) for full details.
 
@@ -119,6 +154,45 @@ See [`src/shaft_inspection/README.md`](src/shaft_inspection/README.md) and [`src
 
 Total recorded procurement cost: about **139,590 BDT**.
 
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/prototype_three_quarter.jpg" alt="Three-quarter view"></td>
+    <td width="33%"><img src="docs/images/prototype_front.jpg" alt="Front view"></td>
+    <td width="33%"><img src="docs/images/prototype_top.jpg" alt="Top view"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Three-quarter view</em></td>
+    <td align="center"><em>Front view</em></td>
+    <td align="center"><em>Top view: X layout and central mount stack</em></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/rplidar_mount.jpg" alt="RPLIDAR C1 mount"></td>
+    <td><img src="docs/images/hflow_sensor.jpg" alt="Holybro H-Flow"></td>
+    <td><img src="docs/images/redesigned_mount.jpg" alt="Redesigned mount"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>RPLIDAR C1 on its raised mount</em></td>
+    <td align="center"><em>Holybro H-Flow under the body</em></td>
+    <td align="center"><em>Redesigned PLA mount above the Pi 5</em></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/cad_isometric.jpg" alt="CAD model"></td>
+    <td><img src="docs/images/exploded_view.jpg" alt="Exploded view"></td>
+    <td><img src="docs/images/mount_assembly_cad.jpg" alt="Mount assembly CAD"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>CAD model with propeller guards</em></td>
+    <td align="center"><em>Exploded view of the stack</em></td>
+    <td align="center"><em>Ventilated housing with the Pi 5 in place</em></td>
+  </tr>
+</table>
+
+### Power distribution and wiring
+
+The flight domain (left) and the compute domain (right) have separate power supplies. They are joined only by the TELEM2–UART link (TX, RX and ground only; the Pixhawk's 5 V is never connected to the Pi).
+
+<p align="center"><img src="docs/images/power_wiring.png" alt="Power distribution and wiring" width="95%"></p>
+
 ---
 
 ## Repository Layout
@@ -128,6 +202,7 @@ Total recorded procurement cost: about **139,590 BDT**.
 ├── drone_gcs.py                 # Browser-based Ground Control launcher (port 8080)
 ├── web_teleop.py                # Web teleop dashboard: MJPEG video, joystick/D-pad/keys (port 8000)
 ├── TECHNICAL_HANDBOOK.md        # Workspace technical handbook
+├── docs/images/                 # Photos, diagrams and plots used in this README
 ├── run_cmds/
 │   ├── slam.sh                  # Brings up the LiDAR-anchored localization chain in order
 │   └── drone3d.rviz             # RViz2 config for 2D/3D mapping
@@ -231,6 +306,55 @@ The full parameter set is in [`src/shaft_inspection/deploy/px4_v1.14_shaft.param
 | Shaft mission (SITL) | 24.8 m autonomous descent + return, no wall contact |
 | Bore-centre estimator | 1–5 cm agreement on circular, rectangular, elliptical, D-shaped and rough sections, ~3 ms per scan |
 
+### Flight-log analysis (283 s GPS-free flight)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/log_attitude.jpg" alt="Attitude"></td>
+    <td width="50%"><img src="docs/images/log_altitude.jpg" alt="Altitude"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Roll, pitch and yaw</em></td>
+    <td align="center"><em>Altitude: 1.15 m hold, σ = 0.07 m</em></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/log_vibration_fft.jpg" alt="Vibration FFT"></td>
+    <td><img src="docs/images/log_battery.jpg" alt="Battery"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Accelerometer FFT: energy confined to the 105–111 Hz rotor band</em></td>
+    <td align="center"><em>Battery voltage, current and remaining charge</em></td>
+  </tr>
+</table>
+
+### Mapping
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/map_multiroom.jpg" alt="Multi-room occupancy map"></td>
+    <td width="50%"><img src="docs/images/map_perspective.jpg" alt="Perspective view of a mapped area"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Occupancy map of a multi-room area</em></td>
+    <td align="center"><em>Perspective view of a mapped area</em></td>
+  </tr>
+</table>
+
+### Ground-control software
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/teleop_home.jpg" alt="Teleop home"></td>
+    <td width="33%"><img src="docs/images/teleop_control.jpg" alt="Teleop control"></td>
+    <td width="33%"><img src="docs/images/log_workbench.jpg" alt="Log workbench"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Web teleop: video, arming and emergency controls</em></td>
+    <td align="center"><em>Virtual joystick and D-pad</em></td>
+    <td align="center"><em>PX4 flight-log workbench</em></td>
+  </tr>
+</table>
+
 ---
 
 ## Scope and Limitations
@@ -250,7 +374,6 @@ The full parameter set is in [`src/shaft_inspection/deploy/px4_v1.14_shaft.param
 - Abul Hasnat Abdullah (2210061)
 - Azwad Wakif Rajin (2210089)
 - Ahnaf Chowdhury (2210093)
-- Tariqur Rahman Alif (2210107)
 
 **Supervisors:** Dr. Kazi Arafat Rahman · Md. Moyeenul Hossain Ratul · Rafiul Haq · Kazi Tawseef Rahman
 
