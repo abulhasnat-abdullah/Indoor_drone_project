@@ -1,0 +1,119 @@
+#!/bin/sh
+#
+# @name Gazebo x500 shaft inspection
+# @type Quadrotor
+# @class Copter
+#
+# Vertical shaft inspection, matching the real vehicle: Pixhawk 6C,
+# RPLIDAR C1 (horizontal, 360 deg), Holybro H-Flow (downward flow + ToF).
+# GPS denied.  Horizontal position in the bore comes from the lidar bore-centre
+# fix, injected as external vision; height from baro, terrain from the ToF.
+#
+
+. ${R}etc/init.d-posix/airframes/4001_gz_x500
+
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=gz_x500_shaft}
+
+# ---------- GPS denied ----------
+param set-default EKF2_GPS_CTRL 0
+param set-default SYS_HAS_GPS 0
+param set-default COM_ARM_WO_GPS 1
+
+# ---------- Holybro H-Flow: optical flow (PAA3905) ----------
+# Fused, but only near a surface.  Flow needs light (> 5 lux) and texture it can
+# resolve; a dark rock floor 25 m down gives neither, so SENS_FLOW_MAXHGT keeps
+# EKF2 from trusting it deep in the bore.  Its real job is position hold while
+# the pilot flies the vehicle over the shaft mouth -- above ground there are no
+# walls for the lidar fix.  Set EKF2_OF_CTRL 0 to fly lidar-only.
+param set-default SIM_GZ_EN_FLOW 1
+param set-default EKF2_OF_CTRL 1
+param set-default EKF2_OF_QMIN 1
+param set-default EKF2_OF_POS_X 0.0
+param set-default EKF2_OF_POS_Y 0.0
+param set-default EKF2_OF_POS_Z 0.06
+param set-default SENS_FLOW_MINHGT 0.08
+param set-default SENS_FLOW_MAXHGT 5.0
+param set-default SENS_FLOW_MAXR 7.4
+
+# ---------- Lidar / rangefinder enabled ----------
+param set-default SIM_GZ_EN_LIDAR 1
+
+# ---------- Height: baro reference, H-Flow ToF for TERRAIN ----------
+# EKF2_RNG_CTRL 1 (conditional) with a baro height reference makes EKF2 use the
+# rangefinder for terrain height -- how far the ground is below -- and only
+# borrow it for vehicle height while slow and low (< EKF2_RNG_A_HMAX).  When
+# the collar edge passes under the vehicle and the range jumps from ~1 m to the
+# full shaft depth, EKF2 treats it as the ground dropping away and resets
+# TERRAIN; vehicle height stays continuous.  Using the rangefinder as the height
+# REFERENCE instead (EKF2_HGT_REF 2) would move the vehicle's height by 25 m.
+param set-default EKF2_BARO_CTRL 1
+param set-default EKF2_HGT_REF 0
+param set-default EKF2_RNG_CTRL 1
+param set-default EKF2_RNG_A_HMAX 3.0
+param set-default EKF2_RNG_A_VMAX 1.0
+param set-default EKF2_MIN_RNG 0.08
+param set-default EKF2_RNG_NOISE 0.03
+param set-default EKF2_RNG_SFE 0.05
+param set-default EKF2_RNG_POS_X 0.0
+param set-default EKF2_RNG_POS_Y 0.0
+param set-default EKF2_RNG_POS_Z 0.06
+
+# ---------- Horizontal position from lidar shaft-axis fix (EV) ----------
+# bit 0 only: horizontal position. No EV yaw (a round shaft gives none),
+# no EV height (the rangefinder owns that).
+param set-default EKF2_EV_CTRL 1
+param set-default EKF2_EV_DELAY 50
+param set-default EKF2_EV_NOISE_MD 0
+param set-default EKF2_EVP_NOISE 0.05
+param set-default EKF2_EVP_GATE 5.0
+param set-default EKF2_EV_QMIN 0
+
+# ---------- Collision Prevention (Position / Manual modes) ----------
+# Fed by obstacle_distance, which PX4's GZBridge builds from the 2D lidar.
+# Does NOT apply to Offboard - the shaft_mission node owns avoidance there.
+param set-default CP_DIST 0.6
+param set-default CP_DELAY 0.4
+param set-default CP_GUIDE_ANG 30.0
+param set-default CP_GO_NO_DATA 0
+
+# ---------- Confined-space limits ----------
+param set-default MPC_XY_VEL_MAX 1.0
+param set-default MPC_XY_CRUISE 0.8
+param set-default MPC_VEL_MANUAL 0.8
+param set-default MPC_Z_VEL_MAX_DN 0.6
+param set-default MPC_Z_VEL_MAX_UP 1.0
+param set-default MPC_TILTMAX_AIR 20.0
+param set-default MPC_THR_HOVER 0.60
+
+# ---------- Offboard without RC ----------
+param set-default COM_RCL_EXCEPT 4
+# Manual flight in sim comes from QGroundControl's virtual joystick / a USB
+# gamepad, which PX4 receives as MAVLink MANUAL_CONTROL.
+param set-default COM_RC_IN_MODE 1
+# Stick input lost while flying manually: hold (0 was not a valid value).
+param set-default NAV_RCL_ACT 1
+param set-default NAV_DLL_ACT 0
+param set-default COM_OF_LOSS_T 1.0
+
+# ---------- Magnetometer ----------
+# Fusion stays ON because the sim mag is clean and it is the only yaw
+# reference a symmetric bore cannot supply.  The ARMING interference check is
+# disabled: without GPS, EKF2 has no field reference to compare against and
+# reports "Strong magnetic interference" indefinitely, so it never arms.
+#
+# Underground this is not a nuisance but the real situation -- rebar and ore
+# make a mag useless, and you would set EKF2_MAG_TYPE 5 (None) and accept
+# gyro-only yaw that drifts.  See README "Known gaps".
+param set-default EKF2_MAG_TYPE 0
+param set-default EKF2_MAG_CHECK 0
+param set-default COM_ARM_MAG_STR 0
+
+# ---------- Simulated battery ----------
+# Default SITL battery drains 50% in 60 s and then freezes -- that would make
+# the mission's return-budget logic turn around almost immediately.  Model a
+# pack with ~15 min of hover instead.
+param set-default SIM_BAT_DRAIN 900
+param set-default SIM_BAT_MIN_PCT 5
+
+# ---------- SITL nuisance checks ----------
+param set-default CBRK_SUPPLY_CHK 894281

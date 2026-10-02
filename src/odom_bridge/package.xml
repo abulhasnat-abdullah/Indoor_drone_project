@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypeshell="xsd"?>
+<package format="3">
+  <name>odom_bridge</name>
+  <version>0.1.0</version>
+  <description>
+    Bridges PX4 vehicle_odometry to ROS 2 nav_msgs/Odometry + TF, and bridges
+    slam_toolbox-corrected pose back into PX4 EKF2 as external vision odometry.
+  </description>
+  <maintainer email="abd@example.com">Abd</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>px4_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>python3-numpy</depend>
+
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>rf2o_laser_odometry</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

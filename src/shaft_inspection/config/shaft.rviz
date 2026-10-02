@@ -1,0 +1,61 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded: [/Global Options1, /ShaftCloud1]
+      Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 20
+      Color: 100; 100; 100
+      Reference Frame: shaft
+    - Class: rviz_default_plugins/PointCloud2
+      Name: ShaftCloud
+      Enabled: true
+      Topic:
+        Value: /shaft/cloud
+        Depth: 1
+        Durability Policy: Volatile
+        Reliability Policy: Reliable
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: AxisColor
+      Axis: Z
+      Autocompute Intensity Bounds: true
+      Decay Time: 0
+    - Class: rviz_default_plugins/LaserScan
+      Name: LiveScan
+      Enabled: true
+      Topic:
+        Value: /scan
+        Depth: 5
+        Durability Policy: Volatile
+        Reliability Policy: Best Effort
+      Style: Points
+      Size (Pixels): 3
+      Color: 255; 90; 30
+      Decay Time: 0
+  Global Options:
+    Background Color: 30; 30; 34
+    Fixed Frame: shaft
+    Frame Rate: 20
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Distance: 35
+      Focal Point: {X: 0, Y: 0, Z: -12}
+      Pitch: 0.2
+      Yaw: 0.8
+      Target Frame: shaft
+Window Geometry:
+  Height: 900
+  Width: 1400

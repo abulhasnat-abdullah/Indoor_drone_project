@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shaft Ops</title>
+<style>
+  :root{
+    --bg:#0c0f12; --panel:#13181d; --panel2:#171d23; --line:#242c34; --ink:#d9e1e8;
+    --dim:#7b8792; --faint:#4a545d;
+    --ok:#3ecf8e; --warn:#f2b441; --bad:#ff5c5c; --mission:#4aa8ff; --pilot:#c58cff;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.35 var(--sans)}
+  .wrap{padding:12px 16px 24px;max-width:1600px;margin:0 auto}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .dim{color:var(--dim)} .faint{color:var(--faint)}
+
+  /* ---------- top strip ---------- */
+  .top{display:grid;grid-template-columns:minmax(260px,1.3fr) repeat(3,minmax(140px,1fr)) minmax(280px,1.6fr);gap:10px;margin-bottom:10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+  .label{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .authority{display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
+  .authority .who{font:700 30px/1 var(--sans);letter-spacing:.02em}
+  .authority .sub{margin-top:6px;color:var(--dim)}
+  .authority::before{content:"";position:absolute;inset:0 auto 0 0;width:5px;background:var(--acc,var(--faint))}
+  .authority.PILOT{--acc:var(--pilot)} .authority.PILOT .who{color:var(--pilot)}
+  .authority.MISSION{--acc:var(--mission)} .authority.MISSION .who{color:var(--mission)}
+  .authority.FAILSAFE{--acc:var(--bad);background:#2a1414} .authority.FAILSAFE .who{color:var(--bad)}
+  .authority.NO\ LINK .who{color:var(--bad)}
+  .big{font:600 20px/1.1 var(--sans)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;letter-spacing:.04em;border:1px solid currentColor}
+  .links{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:6px}
+  .link{display:flex;align-items:center;gap:7px;padding:4px 6px;background:var(--panel2);border-radius:6px;min-width:0}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--bad);box-shadow:0 0 0 3px #ff5c5c22}
+  .dot.ok{background:var(--ok);box-shadow:0 0 0 3px #3ecf8e22}
+  .link .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .link .r{margin-left:auto;color:var(--dim);font-size:11px}
+
+  /* ---------- mission strip ---------- */
+  .strip{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+  .st{flex:1 1 72px;text-align:center;padding:7px 4px;border-radius:7px;background:var(--panel);border:1px solid var(--line);color:var(--faint);font:600 11px/1 var(--sans);letter-spacing:.05em}
+  .st.done{color:var(--dim)}
+  .st.now{background:#12304a;border-color:var(--mission);color:#fff;box-shadow:inset 0 -3px 0 var(--mission)}
+  .st.now.ABORT{background:#3a1616;border-color:var(--bad);box-shadow:inset 0 -3px 0 var(--bad)}
+
+  /* ---------- main grid ---------- */
+  .grid{display:grid;grid-template-columns:minmax(300px,1.15fr) minmax(280px,1fr) minmax(300px,1fr);gap:10px}
+  .col{display:flex;flex-direction:column;gap:10px;min-width:0}
+  canvas{display:block;width:100%}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;align-items:baseline}
+  .kv .k{color:var(--dim)} .kv .v{text-align:right}
+  .row{display:flex;gap:10px;align-items:stretch}
+  .row>*{flex:1;min-width:0}
+  .stat .v{font:600 22px/1.1 var(--mono)} .stat .u{color:var(--dim);font-size:12px;margin-left:3px}
+  .flag{display:inline-block;margin:2px 4px 2px 0;padding:2px 6px;border-radius:5px;background:#3a1616;color:#ffb3b3;font:600 11px var(--mono)}
+  .okline{color:var(--ok)}
+  .sticks{display:flex;gap:14px;justify-content:center;align-items:center}
+  .stick{position:relative;width:118px;height:118px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
+  .stick::before,.stick::after{content:"";position:absolute;background:var(--line)}
+  .stick::before{left:50%;top:8px;bottom:8px;width:1px}
+  .stick::after{top:50%;left:8px;right:8px;height:1px}
+  .knob{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:var(--pilot);box-shadow:0 0 12px #c58cff88;left:50%;top:50%;transition:left .08s,top .08s}
+  .stick .cap{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10.5px;color:var(--dim)}
+  .buttons{display:flex;gap:4px;flex-wrap:wrap;margin-top:24px;justify-content:center}
+  .btn{width:22px;height:22px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);font:600 10px/20px var(--mono);text-align:center;color:var(--faint)}
+  .btn.on{background:var(--pilot);color:#140a1f;border-color:var(--pilot)}
+  .moving{margin-left:auto}
+  .events{max-height:430px;overflow:auto;font:12px/1.45 var(--mono)}
+  .ev{display:grid;grid-template-columns:60px 86px 1fr;gap:8px;padding:3px 0;border-bottom:1px solid #1b2229}
+  .ev .s{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ev.warn .m{color:var(--warn)} .ev.error .m{color:var(--bad)}
+  .ev.mode .m{color:var(--pilot)} .ev.mission .m{color:var(--mission)}
+  .legend{display:flex;gap:12px;font-size:11px;color:var(--dim);margin-top:6px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .banner{display:none;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#3a1616;color:#ffc4c4;border:1px solid #6b2424;font-weight:600}
+  .banner.show{display:block}
+
+  @media (max-width:1180px){
+    .top{grid-template-columns:1fr 1fr 1fr}
+    .top .authority{grid-column:1/-1}
+    .top .linkcard{grid-column:1/-1}
+    .grid{grid-template-columns:1fr 1fr}
+    .grid .col:last-child{grid-column:1/-1}
+  }
+  @media (max-width:720px){
+    .top{grid-template-columns:1fr 1fr}
+    .grid{grid-template-columns:1fr}
+    .authority .who{font-size:24px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="conn" class="banner">Dashboard disconnected — retrying…</div>
+
+  <div class="top">
+    <div class="card authority" id="authCard">
+      <div class="label">In control</div>
+      <div class="who" id="auth">—</div>
+      <div class="sub" id="authSub">waiting for data</div>
+    </div>
+    <div class="card"><div class="label">PX4 mode</div><div class="big" id="nav">—</div><div class="dim" id="navUser"></div></div>
+    <div class="card"><div class="label">Arming</div><div class="big" id="arm">—</div><div class="dim" id="fsTop"></div></div>
+    <div class="card"><div class="label">Mission</div><div class="big" id="mission">—</div><div class="dim" id="uptime"></div></div>
+    <div class="card linkcard"><div class="label">Links</div><div class="links" id="links"></div></div>
+  </div>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="grid">
+    <!-- ================= bore ================= -->
+    <div class="col">
+      <div class="card">
+        <div class="label">Bore — top-down lidar, vehicle at centre, nose up</div>
+        <canvas id="bore" height="420"></canvas>
+        <div class="legend">
+          <span><i style="background:#9fb3c4"></i>lidar returns</span>
+          <span><i style="background:var(--mission)"></i>bore centre</span>
+          <span><i style="background:var(--ok)"></i>clearance</span>
+          <span><i style="background:var(--warn)"></i>command</span>
+          <span><i style="background:var(--bad)"></i>nearest</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="stat"><div class="label">Offset from centre</div><span class="v" id="off">—</span><span class="u">m</span></div>
+          <div class="stat"><div class="label">Clearance</div><span class="v" id="clr">—</span><span class="u">m</span></div>
+          <div class="stat"><div class="label">Nearest wall</div><span class="v" id="near">—</span><span class="u">m</span></div>
+        </div>
+        <div class="kv mono" style="margin-top:8px">
+          <span class="k">bore fix</span><span class="v" id="fix">—</span>
+          <span class="k">roundness</span><span class="v" id="round">—</span>
+          <span class="k">command (N, E, D)</span><span class="v" id="cmd">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= flight ================= -->
+    <div class="col">
+      <div class="card">
+        <div class="label">Depth &amp; floor</div>
+        <div class="row">
+          <div class="stat"><div class="label">Depth</div><span class="v" id="depth">—</span><span class="u">m</span></div>
+          <div class="stat"><div class="label">Floor below (ToF)</div><span class="v" id="floor">—</span><span class="u">m</span></div>
+        </div>
+        <div class="label" style="margin-top:10px">Return budget — can it still climb out?</div>
+        <div id="budget" class="mono dim">—</div>
+        <canvas id="chart" height="170" style="margin-top:8px"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--mission)"></i>depth</span>
+          <span><i style="background:var(--ok)"></i>clearance</span>
+          <span><i style="background:#9fb3c4"></i>floor distance</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="label">Estimator (EKF2)</div>
+        <div class="kv mono">
+          <span class="k">horizontal position</span><span class="v" id="xyv">—</span>
+          <span class="k">height</span><span class="v" id="zv">—</span>
+          <span class="k">floor range backed by ToF</span><span class="v" id="dbv">—</span>
+          <span class="k">position N / E / D</span><span class="v" id="pos">—</span>
+          <span class="k">velocity N / E / D</span><span class="v" id="vel">—</span>
+          <span class="k">roll / pitch / heading</span><span class="v" id="att">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="label">Failsafe flags</div>
+        <div id="flags" class="dim">—</div>
+      </div>
+    </div>
+
+    <!-- ================= pilot + events ================= -->
+    <div class="col">
+      <div class="card">
+        <div class="label" style="display:flex">Pilot input <span class="moving" id="moving"></span></div>
+        <div class="sticks">
+          <div class="stick"><div class="knob" id="kL"></div><div class="cap">yaw · throttle</div></div>
+          <div class="stick"><div class="knob" id="kR"></div><div class="cap">roll · pitch</div></div>
+        </div>
+        <div class="buttons" id="btns"></div>
+        <div class="dim mono" style="text-align:center;margin-top:6px" id="mcsrc">no joystick data</div>
+      </div>
+      <div class="card">
+        <div class="label">Timeline</div>
+        <div class="events" id="events"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (v, d=2) => (v === null || v === undefined) ? '—' : Number(v).toFixed(d);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let last = null;
+
+function sizeCanvas(c){
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const h = parseInt(c.getAttribute('height'));
+  if (c.width !== Math.round(r.width*dpr) || c.height !== Math.round(h*dpr)){
+    c.width = Math.round(r.width*dpr); c.height = Math.round(h*dpr); c.style.height = h+'px';
+  }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return [ctx, r.width, h];
+}
+
+function drawBore(s){
+  const c = $('bore'), [ctx, W, H] = sizeCanvas(c);
+  ctx.clearRect(0,0,W,H);
+  const cx = W/2, cy = H/2;
+  let maxR = 2.0;
+  if (s.scan){ const f = s.scan.filter(v => v !== null); if (f.length) maxR = Math.max(1.5, Math.min(6, Math.max(...f)*1.08)); }
+  const k = (Math.min(W,H)/2 - 12) / maxR;
+  // level frame: x forward (up on screen), y left (left on screen)
+  const P = (x,y) => [cx - y*k, cy - x*k];
+
+  ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--faint'); ctx.font = '10px ' + css('--mono');
+  for (let r=0.5; r<=maxR+1e-6; r+=0.5){
+    ctx.beginPath(); ctx.arc(cx,cy,r*k,0,Math.PI*2); ctx.lineWidth = (Math.abs(r%1)<1e-6)?1:0.5; ctx.stroke();
+    if (Math.abs(r%1)<1e-6) ctx.fillText(r.toFixed(0)+' m', cx+r*k+3, cy-3);
+  }
+  ctx.beginPath(); ctx.moveTo(cx,cy-maxR*k); ctx.lineTo(cx,cy+maxR*k); ctx.moveTo(cx-maxR*k,cy); ctx.lineTo(cx+maxR*k,cy); ctx.lineWidth=.5; ctx.stroke();
+
+  let nearest = null;
+  if (s.scan){
+    const n = s.scan.length;
+    ctx.fillStyle = '#9fb3c4';
+    for (let i=0;i<n;i++){
+      const r = s.scan[i]; if (r === null) continue;
+      const a = (i+0.5)/n*2*Math.PI;
+      const [px,py] = P(r*Math.cos(a), r*Math.sin(a));
+      ctx.fillRect(px-1.2,py-1.2,2.4,2.4);
+      if (nearest === null || r < nearest[0]) nearest = [r,a];
+    }
+  }
+  // bore centre + clearance circle (offset is the vehicle's displacement FROM the centre)
+  if (s.offset && s.valid){
+    const [bx,by] = P(-s.offset[0], -s.offset[1]);
+    if (s.clearance){ ctx.beginPath(); ctx.arc(bx,by,s.clearance*k,0,Math.PI*2); ctx.strokeStyle=css('--ok'); ctx.lineWidth=1.5; ctx.setLineDash([5,4]); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.strokeStyle = css('--mission'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx-7,by); ctx.lineTo(bx+7,by); ctx.moveTo(bx,by-7); ctx.lineTo(bx,by+7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(bx,by); ctx.globalAlpha=.5; ctx.stroke(); ctx.globalAlpha=1;
+  }
+  if (nearest){
+    const [nx,ny] = P(nearest[0]*Math.cos(nearest[1]), nearest[0]*Math.sin(nearest[1]));
+    ctx.beginPath(); ctx.arc(nx,ny,5,0,Math.PI*2); ctx.strokeStyle=css('--bad'); ctx.lineWidth=2; ctx.stroke();
+  }
+  // commanded velocity, rotated from NED into the level body frame
+  if (s.cmd && s.lp && s.lp.heading !== null){
+    const h = s.lp.heading, c0 = Math.cos(h), s0 = Math.sin(h);
+    const vx = s.cmd[0]*c0 + s.cmd[1]*s0, vy = s.cmd[0]*s0 - s.cmd[1]*c0;
+    const [ex,ey] = P(vx*2, vy*2);
+    if (Math.hypot(vx,vy) > 0.01){
+      ctx.strokeStyle = css('--warn'); ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey); ctx.stroke();
+      const ang = Math.atan2(ey-cy, ex-cx);
+      ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex-9*Math.cos(ang-0.4), ey-9*Math.sin(ang-0.4)); ctx.lineTo(ex-9*Math.cos(ang+0.4), ey-9*Math.sin(ang+0.4)); ctx.closePath(); ctx.fillStyle=css('--warn'); ctx.fill();
+    }
+  }
+  // vehicle
+  ctx.fillStyle = css('--ink');
+  ctx.beginPath(); ctx.moveTo(cx,cy-11); ctx.lineTo(cx-7,cy+8); ctx.lineTo(cx,cy+4); ctx.lineTo(cx+7,cy+8); ctx.closePath(); ctx.fill();
+  if (!s.scan){ ctx.fillStyle=css('--dim'); ctx.font='13px '+css('--sans'); ctx.textAlign='center'; ctx.fillText('no lidar data', cx, cy+40); ctx.textAlign='left'; }
+}
+
+function drawChart(s){
+  const c = $('chart'), [ctx, W, H] = sizeCanvas(c);
+  ctx.clearRect(0,0,W,H);
+  const h = s.hist || [];
+  if (h.length < 2) { ctx.fillStyle=css('--dim'); ctx.fillText('collecting…', 8, 20); return; }
+  const t0 = h[0][0], t1 = h[h.length-1][0] || t0+1;
+  let ymax = 2;
+  h.forEach(r => [r[1],r[2],r[3]].forEach(v => { if (v !== null && v > ymax) ymax = v; }));
+  ymax = Math.ceil(ymax*1.1);
+  const L=30, R=6, T=6, B=16;
+  const X = t => L + (t-t0)/Math.max(1e-6,(t1-t0))*(W-L-R);
+  const Y = v => T + v/ymax*(H-T-B);           // depth grows downward
+  ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--faint'); ctx.font='10px '+css('--mono'); ctx.lineWidth=.5;
+  const step = ymax > 20 ? 5 : (ymax > 8 ? 2 : 1);
+  for (let v=0; v<=ymax; v+=step){ ctx.beginPath(); ctx.moveTo(L,Y(v)); ctx.lineTo(W-R,Y(v)); ctx.stroke(); ctx.fillText(v+'m', 2, Y(v)+3); }
+  const line = (idx, color, width) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath(); let on=false;
+    h.forEach(r => { const v=r[idx]; if (v===null){ on=false; return; } const x=X(r[0]), y=Y(v); on ? ctx.lineTo(x,y) : ctx.moveTo(x,y); on=true; });
+    ctx.stroke();
+  };
+  line(3, '#9fb3c4', 1); line(2, css('--ok'), 1.5); line(1, css('--mission'), 2);
+  ctx.fillStyle=css('--faint'); ctx.fillText(Math.round(t1-t0)+' s', W-R-30, H-3);
+}
+
+function render(s){
+  last = s;
+  // authority
+  const ac = $('authCard'); ac.className = 'card authority ' + s.authority;
+  $('auth').textContent = s.authority;
+  const subs = {PILOT:'manual flight — switch to Offboard to start the mission',
+                MISSION:'mission flying in Offboard — move the sticks to take over',
+                FAILSAFE:'PX4 failsafe active', 'ON GROUND':'disarmed', 'NO LINK':'no data from PX4'};
+  let sub = subs[s.authority] || '';
+  // Hold / Mission / Return need a GLOBAL position, which a GPS-denied vehicle
+  // never has: PX4 refuses to arm in them with a generic "health failures" error.
+  const gpsModes = ['HOLD', 'MISSION', 'RETURN', 'TAKEOFF', 'LAND'];
+  if (s.arming !== 'ARMED' && gpsModes.includes(s.nav))
+    sub = `⚠ ${s.nav} needs GPS — switch to POSITION to arm`;
+  $('authSub').textContent = sub;
+  $('authSub').style.color = sub.startsWith('⚠') ? css('--warn') : '';
+  $('nav').textContent = s.nav;
+  $('navUser').textContent = (s.nav_user && s.nav_user !== s.nav) ? 'pilot selected: ' + s.nav_user : '';
+  const arm = $('arm'); arm.textContent = s.arming; arm.style.color = s.arming === 'ARMED' ? css('--warn') : css('--ink');
+  $('fsTop').innerHTML = s.failsafe ? '<span class="pill" style="color:var(--bad)">FAILSAFE</span>' : '';
+  $('mission').textContent = s.mission || '—';
+  $('uptime').textContent = 'dashboard ' + Math.round(s.t) + ' s';
+
+  // links
+  $('links').innerHTML = Object.entries(s.links).map(([n,l]) =>
+    `<div class="link" title="${l.age===null?'never seen':'last '+l.age+' s ago'}"><span class="dot ${l.ok?'ok':''}"></span><span class="n">${n}</span><span class="r mono">${l.ok ? (l.hz? l.hz+' Hz':'ok') : (l.age===null?'—':l.age+'s')}</span></div>`).join('');
+
+  // mission strip
+  const idx = s.mission_states.indexOf(s.mission);
+  $('strip').innerHTML = s.mission_states.map((st,i) =>
+    `<div class="st ${i===idx?'now '+st:''} ${idx>=0 && i<idx && st!=='ABORT'?'done':''}">${st}</div>`).join('');
+
+  // bore numbers
+  const off = s.offset ? Math.hypot(s.offset[0], s.offset[1]) : null;
+  $('off').textContent = fmt(off);
+  $('clr').textContent = fmt(s.clearance);
+  const nearV = s.sector_min ? Math.min(...s.sector_min.filter(v => v !== null)) : null;
+  $('near').textContent = (nearV === null || !isFinite(nearV)) ? '—' : nearV.toFixed(2);
+  $('near').style.color = (nearV !== null && nearV < 0.65) ? css('--bad') : css('--ink');
+  $('fix').innerHTML = s.valid === null ? '—' : (s.valid ? '<span class="okline">valid</span>' : '<span style="color:var(--bad)">NO FIX</span>');
+  $('round').textContent = fmt(s.roundness) + (s.radius ? `  (circle r ${fmt(s.radius)} m)` : '');
+  $('cmd').textContent = s.cmd ? s.cmd.map(v => fmt(v)).join('  ') + ' m/s' : '—';
+
+  // return budget: [battery_remaining, battery_needed, time_used, time_limit, climb_s]
+  const b = s.budget;
+  if (b){
+    const bar = (have, need, label, unit, invert) => {
+      const pct = Math.max(0, Math.min(100, invert ? 100*(1-have/need) : 100*have));
+      const ok = invert ? have < need : have > need;
+      const col = ok ? (Math.abs(have-need) < (invert? 0.15*need : 0.1) ? 'var(--warn)' : 'var(--ok)') : 'var(--bad)';
+      return `<div style="display:flex;gap:8px;align-items:center;margin:3px 0">
+        <span style="width:62px">${label}</span>
+        <div style="flex:1;height:8px;background:var(--panel2);border-radius:4px;position:relative;overflow:hidden">
+          <div style="position:absolute;inset:0 auto 0 0;width:${pct}%;background:${col}"></div>
+          ${invert ? '' : `<div style="position:absolute;top:-2px;bottom:-2px;left:${Math.min(100,100*need)}%;width:2px;background:var(--ink)"></div>`}
+        </div>
+        <span style="width:150px;text-align:right">${unit}</span></div>`;
+    };
+    let html = '';
+    if (b[0] >= 0 && b[1] >= 0) html += bar(b[0], b[1], 'battery', `${(b[0]*100).toFixed(0)}% / needs ${(b[1]*100).toFixed(0)}%`, false);
+    else html += '<div>battery: estimating drain…</div>';
+    if (b[3] > 0) html += bar(b[2], b[3], 'time', `${b[2].toFixed(0)} s of ${b[3].toFixed(0)} s`, true);
+    html += `<div>climb out from here ≈ ${b[4].toFixed(0)} s</div>`;
+    $('budget').innerHTML = html;
+  }
+
+  // depth
+  $('depth').textContent = fmt(s.depth);
+  const lp = s.lp;
+  $('floor').textContent = (lp && lp.dist_bottom_valid) ? fmt(lp.dist_bottom) : '—';
+  const yes = b => b ? '<span class="okline">valid</span>' : '<span style="color:var(--bad)">invalid</span>';
+  if (lp){
+    $('xyv').innerHTML = yes(lp.xy_valid); $('zv').innerHTML = yes(lp.z_valid);
+    $('dbv').innerHTML = lp.dist_bottom_valid ? (lp.dist_bottom_range ? '<span class="okline">yes</span>' : '<span style="color:var(--warn)">flow only</span>') : '<span class="dim">no floor</span>';
+    $('pos').textContent = [lp.x,lp.y,lp.z].map(v => fmt(v)).join('  ');
+    $('vel').textContent = [lp.vx,lp.vy,lp.vz].map(v => fmt(v)).join('  ');
+  }
+  if (s.att) $('att').textContent = `${fmt(s.att.roll,1)}°  ${fmt(s.att.pitch,1)}°  ${fmt(s.att.yaw,0)}°`;
+  $('flags').innerHTML = (s.fs_flags && s.fs_flags.length)
+      ? s.fs_flags.map(f => `<span class="flag">${f}</span>`).join('')
+      : '<span class="okline">none active</span>';
+
+  // pilot input  (PX4: roll/pitch/yaw/throttle in [-1, 1])
+  const mc = s.mc;
+  const knob = (el, x, y) => { el.style.left = (50 + 42*Math.max(-1,Math.min(1,x)))+'%'; el.style.top = (50 - 42*Math.max(-1,Math.min(1,y)))+'%'; };
+  if (mc){
+    knob($('kL'), mc.yaw, mc.throttle); knob($('kR'), mc.roll, mc.pitch);
+    $('moving').innerHTML = mc.sticks_moving ? '<span class="pill" style="color:var(--pilot)">STICKS MOVING — takeover</span>' : '';
+    $('mcsrc').textContent = (mc.valid ? 'valid' : 'INVALID') + ' · source ' + (mc.source===1?'RC':(mc.source>=2?'MAVLink/joystick':'unknown'));
+    let b=''; for (let i=0;i<16;i++) b += `<div class="btn ${(mc.buttons>>i)&1?'on':''}">${i}</div>`; $('btns').innerHTML = b;
+  }
+
+  // events
+  $('events').innerHTML = (s.events || []).map(e =>
+    `<div class="ev ${e.level}"><span class="dim">${e.wall}</span><span class="s">${e.source}</span><span class="m">${e.text.replace(/</g,'&lt;')}</span></div>`).join('');
+
+  drawBore(s); drawChart(s);
+}
+
+function connect(){
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => $('conn').classList.remove('show');
+  ws.onmessage = ev => { try { render(JSON.parse(ev.data)); } catch(e){ console.error(e); } };
+  ws.onclose = () => { $('conn').classList.add('show'); setTimeout(connect, 1500); };
+}
+window.addEventListener('resize', () => last && render(last));
+connect();
+</script>
+</body>
+</html>

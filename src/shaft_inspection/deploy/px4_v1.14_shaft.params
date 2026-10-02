@@ -1,0 +1,65 @@
+# Shaft inspection - REAL vehicle parameters for PX4 v1.14.x (Pixhawk 6C)
+# Types verified against the v1.14.4 source.  Import: QGroundControl > Parameters > Tools > Load from file.
+# Lines marked MEASURE must be set from your airframe before flight.
+# NOT included on purpose: serial/DDS port (set UXRCE_DDS_CFG=TELEM2 and SER_TEL2_BAUD=921600 by hand, then reboot),
+# battery, frame geometry, RC mapping and ESC settings - those belong to your existing vehicle setup.
+#
+# Vehicle-Id	Component-Id	Name	Value	Type
+# GPS denied
+1	1	EKF2_GPS_CTRL	0	6
+1	1	SYS_HAS_GPS	0	6
+1	1	COM_ARM_WO_GPS	1	6
+# Holybro H-Flow over DroneCAN
+1	1	UAVCAN_ENABLE	2	6
+1	1	UAVCAN_SUB_FLOW	1	6
+1	1	UAVCAN_SUB_RNG	1	6
+# Optical flow: position hold near a surface only
+1	1	EKF2_OF_CTRL	1	6
+1	1	EKF2_OF_QMIN	1	6
+1	1	EKF2_OF_POS_X	0.000000	9
+1	1	EKF2_OF_POS_Y	0.000000	9
+1	1	EKF2_OF_POS_Z	0.060000	9
+1	1	SENS_FLOW_MINHGT	0.080000	9
+1	1	SENS_FLOW_MAXHGT	5.000000	9
+1	1	SENS_FLOW_MAXR	7.400000	9
+1	1	EKF2_TERR_MASK	3	6
+# Height: baro reference, ToF for terrain (see README 'Height, terrain and the collar edge')
+1	1	EKF2_BARO_CTRL	1	6
+1	1	EKF2_HGT_REF	0	6
+1	1	EKF2_RNG_CTRL	1	6
+1	1	EKF2_RNG_A_HMAX	3.000000	9
+1	1	EKF2_RNG_A_VMAX	1.000000	9
+1	1	EKF2_MIN_RNG	0.080000	9
+1	1	EKF2_RNG_NOISE	0.030000	9
+1	1	EKF2_RNG_SFE	0.050000	9
+1	1	EKF2_RNG_POS_X	0.000000	9
+1	1	EKF2_RNG_POS_Y	0.000000	9
+1	1	EKF2_RNG_POS_Z	0.060000	9
+# Horizontal position from the lidar bore-centre fix (external vision)
+1	1	EKF2_EV_CTRL	1	6
+1	1	EKF2_EV_DELAY	50.000000	9
+1	1	EKF2_EV_NOISE_MD	0	6
+1	1	EKF2_EVP_NOISE	0.050000	9
+1	1	EKF2_EVP_GATE	5.000000	9
+1	1	EKF2_EV_QMIN	0	6
+# Magnetometer: fine at the surface; unreliable underground (see README Known gaps)
+1	1	EKF2_MAG_TYPE	0	6
+# Collision Prevention for Position mode (pilot flying)
+1	1	CP_DIST	0.600000	9
+1	1	CP_DELAY	0.400000	9
+1	1	CP_GUIDE_ANG	30.000000	9
+1	1	CP_GO_NO_DATA	0	6
+# Confined-space limits
+1	1	MPC_XY_VEL_MAX	1.000000	9
+1	1	MPC_XY_CRUISE	0.800000	9
+1	1	MPC_VEL_MANUAL	0.800000	9
+1	1	MPC_Z_VEL_MAX_DN	0.600000	9
+1	1	MPC_Z_VEL_MAX_UP	1.000000	9
+1	1	MPC_TILTMAX_AIR	20.000000	9
+# Failsafes
+1	1	COM_OF_LOSS_T	1.000000	9
+1	1	COM_OBL_RC_ACT	1	6
+1	1	COM_RCL_EXCEPT	4	6
+1	1	NAV_DLL_ACT	0	6
+# Stick takeover from Offboard: v1.14 DEFAULT (1) covers auto modes ONLY - bit 1 adds Offboard
+1	1	COM_RC_OVERRIDE	3	6

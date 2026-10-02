@@ -1,0 +1,112 @@
+# ---------------------------------------------------------------------------
+# shaft_real.yaml -- shaft_inspection parameters for the REAL vehicle.
+#
+# The repo's config/shaft.yaml is the SIMULATION config (use_sim_time: true,
+# Gazebo laserscan for the floor range, auto_launch).  None of that is right
+# here, so the vehicle gets its own file and never reads shaft.yaml.
+#
+# Values marked MEASURE must be checked on the airframe before the first
+# flight -- see docs/HARDWARE_GUIDE.md §10.
+# ---------------------------------------------------------------------------
+/**:
+  ros__parameters:
+    use_sim_time: false
+
+shaft_perception:
+  ros__parameters:
+    use_sim_time: false
+    scan_topic: /scan
+    n_sectors: 36
+    min_coverage: 0.85
+    search_window: 6.0
+    min_clearance_valid: 0.35
+    max_clearance_valid: 8.0
+    roundness_for_radius: 0.93
+    self_filter_radius: 0.25       # MEASURE: furthest own-airframe return from the lidar centre
+    lidar_yaw_offset_deg: 0.0      # MEASURE: lidar 0 deg vs airframe nose
+    lidar_upside_down: false       # MEASURE: set true if the lidar is inverted
+    repulse_influence: 1.0
+    repulse_gain: 0.35
+    repulse_max: 0.6
+    anchor_samples: 30
+    # Feeds the bore-relative position to EKF2 as external vision.  This is the
+    # SAME PX4 topic the SLAM stack's vision_odom bridge writes to, so the two
+    # must never run at once -- the GCS enforces that.
+    publish_ev: true
+
+shaft_mission:
+  ros__parameters:
+    use_sim_time: false
+    # The pilot flies the drone over the shaft and switches to Offboard; the
+    # mission node only takes control then.  Never auto_launch on hardware.
+    start_mode: pilot_handover
+    # PX4 1.14 does not export distance_sensor over DDS.  dist_bottom from
+    # vehicle_local_position is EKF2's range-fused height above ground, which
+    # is the H-Flow's ToF once RNG_AID/EKF2_HGT_REF are set up.
+    range_source: local_position
+    dry_run: false                 # true = compute everything, command nothing (bench)
+    control_hz: 20.0
+    # --- centring ---
+    kp_lateral: 1.2
+    kd_lateral: 0.45
+    max_lateral_speed: 0.4         # slower than sim for the first flights
+    center_tol: 0.12
+    center_settle_speed: 0.15
+    center_hold_s: 1.5
+    # --- vertical ---
+    descend_speed: 0.25            # slower than sim for the first flights
+    ascend_speed: 0.4
+    takeoff_clearance: 1.0
+    kp_vertical: 0.6
+    max_vertical_speed: 0.8
+    # --- mission ---
+    slowdown_range: 2.5
+    bottom_range: 0.8              # turn around this far above the floor
+    bottom_confirm_n: 3
+    max_depth: 10.0                # SET: known shaft depth + margin (0 = no limit)
+    mission_timeout: 300.0         # SET: from measured endurance (0 = off)
+    dwell_seconds: 6.0
+    # --- return budget: when to give up descending and climb back out ---
+    # PX4 v1.14 does NOT export battery_status over uXRCE-DDS, so battery_reserve
+    # and drain_window_s below are inert on this vehicle -- the mission node
+    # never receives a battery sample. Until that changes, the only things
+    # actually forcing a turnaround are max_depth above and this budget.
+    # SET flight_time_budget_s to your MEASURED usable hover endurance in
+    # seconds, counted from arming (a hover-to-landing timing test, not the
+    # spec sheet). Left at 0 it is off.
+    battery_reserve: 0.30
+    return_margin: 1.5
+    exit_buffer_s: 60.0
+    drain_window_s: 60.0
+    flight_time_budget_s: 0.0      # SET ME: measured endurance in seconds
+    # --- avoidance.  Distances are from the LIDAR CENTRE.
+    # Defaults assume prop tips ~0.38 m out.  Add your extra reach (prop
+    # guards, bigger props) to all three.
+    stop_dist: 0.65
+    critical_dist: 0.45
+    descent_min_clearance: 0.60
+    brake_delay: 0.4
+    brake_decel: 1.0
+    n_sectors: 36
+    scan_timeout: 0.5
+    use_repulsion: true
+    auto_descend: true             # false = hover-and-centre test only
+
+shaft_mapper:
+  ros__parameters:
+    use_sim_time: false
+    scan_topic: /scan
+    out_dir: /home/abdazwd/shaft_maps
+    slice_thickness: 0.10
+    min_depth_step: 0.05
+    publish_cloud: true
+    self_filter_radius: 0.25       # same as perception
+    lidar_yaw_offset_deg: 0.0      # same as perception
+    lidar_upside_down: false       # same as perception
+
+shaft_dashboard:
+  ros__parameters:
+    use_sim_time: false
+    host: 0.0.0.0
+    port: 8081                     # 8080 is the GCS; the GCS embeds this one
+    scan_bins: 180

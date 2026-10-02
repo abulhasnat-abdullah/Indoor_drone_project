@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version='1.9'>
+<model name='x500_shaft'>
+<self_collide>false</self_collide>
+
+<!-- Base x500 airframe -->
+<include merge='true'>
+  <uri>x500</uri>
+</include>
+
+<!-- ================= Horizontal 2D LIDAR (360 degree) =================
+     Defined inline rather than including model://lidar_2d_v2, because that
+     shared model is 270 degrees and is used by other airframes.
+
+     360 degrees matters here.  A 270-degree sensor leaves a 90-degree blind
+     wedge; in a shaft that wedge is pointed at a wall, and any centring
+     estimator has to invent the missing geometry.  Inventing it biases the
+     estimate toward the vehicle's own position, which is exactly the wrong
+     answer.  Full coverage removes the problem at the source.
+
+     Link MUST be named 'link' and sensor 'lidar_2d_v2': PX4's GZBridge
+     subscribes to .../link/link/sensor/lidar_2d_v2/scan to build
+     obstacle_distance for Collision Prevention. -->
+<joint name="LidarJoint" type="fixed">
+  <parent>base_link</parent>
+  <child>link</child>
+  <pose relative_to="base_link">0 0 .26 0 0 0</pose>
+</joint>
+<link name="link">
+  <pose relative_to="base_link">0 0 0.26 0 0 0</pose>
+  <inertial>
+    <mass>0.01</mass>
+    <inertia><ixx>1e-05</ixx><iyy>1e-05</iyy><izz>1e-05</izz>
+             <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+  </inertial>
+  <visual name="lidar_visual">
+    <geometry><cylinder><radius>0.035</radius><length>0.05</length></cylinder></geometry>
+    <material><ambient>0.1 0.1 0.1 1</ambient><diffuse>0.2 0.2 0.2 1</diffuse></material>
+  </visual>
+  <sensor name="lidar_2d_v2" type="gpu_lidar">
+    <gz_frame_id>link</gz_frame_id>
+    <pose>0 0 0 0 0 0</pose>
+    <update_rate>10</update_rate>
+    <always_on>1</always_on>
+    <visualize>true</visualize>
+    <ray>
+      <scan>
+        <horizontal>
+          <!-- Slamtec RPLIDAR C1: 360 deg, 10 Hz, ~5 kHz sampling -->
+          <samples>500</samples>
+          <resolution>1</resolution>
+          <min_angle>-3.14159265</min_angle>
+          <max_angle>3.14159265</max_angle>
+        </horizontal>
+        <vertical>
+          <samples>1</samples><resolution>1</resolution>
+          <min_angle>0</min_angle><max_angle>0</max_angle>
+        </vertical>
+      </scan>
+      <range><min>0.05</min><max>12.0</max><resolution>0.01</resolution></range>
+      <noise><type>gaussian</type><mean>0.0</mean><stddev>0.015</stddev></noise>
+    </ray>
+  </sensor>
+</link>
+
+<!-- ================= Holybro H-Flow (downward) =================
+     One module, two sensors, co-located under the airframe:
+       * Broadcom AFBR-S50LV85D ToF rangefinder: 0.08 - 30 m (typical; dark
+         rock and dust reduce this in practice), 12.4 x 6.2 deg FOV.  Modelled
+         as a single ray: a real beam this wide can clip a ledge edge that a
+         single ray misses.
+       * PixArt PAA3905 optical flow: 42 deg FOV, 7.4 rad/s max, needs > 5 lux.
+     Link MUST be 'lidar_sensor_link' / sensor 'lidar' for PX4's GZBridge
+     distance sensor, and 'flow_link' / 'optical_flow' for its flow input. -->
+<joint name="down_range_joint" type="fixed">
+  <parent>base_link</parent>
+  <child>lidar_sensor_link</child>
+</joint>
+<link name="lidar_sensor_link">
+  <pose relative_to="base_link">0 0 -0.06 0 1.5707963 0</pose>
+  <inertial>
+    <mass>0.001</mass>
+    <inertia><ixx>1e-05</ixx><iyy>1e-05</iyy><izz>1e-05</izz>
+             <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+  </inertial>
+  <sensor name='lidar' type='gpu_lidar'>
+    <gz_frame_id>lidar_sensor_link</gz_frame_id>
+    <pose>0 0 0 3.14159 0 0</pose>
+    <update_rate>20</update_rate>
+    <ray>
+      <scan>
+        <horizontal><samples>1</samples><resolution>1</resolution>
+          <min_angle>0</min_angle><max_angle>0</max_angle></horizontal>
+        <vertical><samples>1</samples><resolution>1</resolution>
+          <min_angle>0</min_angle><max_angle>0</max_angle></vertical>
+      </scan>
+      <range><min>0.08</min><max>30.0</max><resolution>0.01</resolution></range>
+      <!-- AFBR-S50: ~1 percent class accuracy; 2 cm sigma is conservative at
+           shaft ranges and representative once dust and dark rock are in play -->
+      <noise><type>gaussian</type><mean>0.0</mean><stddev>0.02</stddev></noise>
+    </ray>
+    <always_on>1</always_on>
+    <visualize>true</visualize>
+  </sensor>
+</link>
+
+<include merge='true'>
+  <uri>model://optical_flow</uri>
+  <pose relative_to="base_link">0 0 -0.05 0 0 0</pose>
+</include>
+<joint name="optical_flow_joint" type="fixed">
+  <parent>base_link</parent>
+  <child>flow_link</child>
+  <pose relative_to="base_link">0 0 -0.05 0 1.5707 0</pose>
+</joint>
+
+</model>
+</sdf>

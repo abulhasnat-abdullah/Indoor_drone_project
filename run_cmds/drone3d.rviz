@@ -1,0 +1,182 @@
+# RViz config for the indoor drone: 2D SLAM map + Nav2 costmaps + the 3D pose
+# and accumulated 3D point cloud.
+#
+# Fixed frame is "map". The drone's true height comes from base_link_3d, which
+# pose_3d_node publishes -- base_link itself is planar because slam_toolbox is
+# a 2D SLAM system, so a display parented to base_link will always sit at z=0.
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+    Tree Height: 700
+  - Class: rviz_common/Views
+    Name: Views
+  - Class: rviz_common/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ""
+  Name: root
+  Global Options:
+    Background Color: 30; 34; 40
+    Fixed Frame: map
+    Frame Rate: 15
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 20
+      Color: 60; 66; 76
+      Alpha: 0.5
+
+    - Class: rviz_default_plugins/Map
+      Name: SLAM Map
+      Enabled: true
+      Topic:
+        Value: /map
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Color Scheme: map
+      Alpha: 0.7
+      Draw Behind: true
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: 3D Map (accumulated scans)
+      Enabled: true
+      Topic:
+        Value: /map_3d
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Style: Boxes
+      Size (m): 0.05
+      Alpha: 1
+      # Colour by the intensity channel, which scan_3d_mapper fills with each
+      # point's height -- so the cloud reads as an altitude gradient.
+      Color Transformer: Intensity
+      Channel Name: intensity
+      Use rainbow: true
+      Autocompute Intensity Bounds: true
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/LaserScan
+      Name: Live Scan
+      Enabled: true
+      Topic:
+        Value: /scan
+        Reliability Policy: Best Effort
+      Style: Points
+      Size (Pixels): 3
+      Color: 255; 90; 60
+      Color Transformer: FlatColor
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Drone Body (3D)
+      Enabled: true
+      Topic:
+        Value: /drone/marker_3d
+        Reliability Policy: Reliable
+
+    - Class: rviz_default_plugins/Pose
+      Name: 3D Pose
+      Enabled: true
+      Topic:
+        Value: /drone/pose_3d
+        Reliability Policy: Reliable
+      Shape: Axes
+      Axes Length: 0.4
+      Axes Radius: 0.03
+
+    - Class: rviz_default_plugins/Path
+      Name: Flight Trail
+      Enabled: true
+      Topic:
+        Value: /drone/path_3d
+        Reliability Policy: Reliable
+      Color: 80; 220; 255
+      Line Style: Lines
+      Alpha: 0.8
+
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Frontiers
+      Enabled: true
+      Topic:
+        Value: /explore/frontiers
+        Reliability Policy: Reliable
+
+    - Class: rviz_default_plugins/Map
+      Name: Global Costmap
+      Enabled: false
+      Topic:
+        Value: /global_costmap/costmap
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Color Scheme: costmap
+      Alpha: 0.4
+
+    - Class: rviz_default_plugins/Map
+      Name: Local Costmap
+      Enabled: false
+      Topic:
+        Value: /local_costmap/costmap
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Color Scheme: costmap
+      Alpha: 0.5
+
+    - Class: rviz_default_plugins/Path
+      Name: Nav2 Plan
+      Enabled: true
+      Topic:
+        Value: /plan
+        Reliability Policy: Reliable
+      Color: 120; 255; 120
+
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: false
+      Show Names: true
+      Marker Scale: 0.4
+
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic:
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Value: /goal_pose
+    - Class: rviz_default_plugins/Measure
+
+  Views:
+    Current:
+      # Orbit, not TopDownOrtho -- an orthographic top-down view cannot show
+      # altitude, which is the entire point of this config.
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Distance: 12
+      Pitch: 0.6
+      Yaw: 0.8
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Target Frame: map
+    Saved:
+      - Class: rviz_default_plugins/Orbit
+        Name: Chase (3D)
+        Distance: 6
+        Pitch: 0.45
+        Yaw: 3.14
+        Target Frame: base_link_3d
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: Top Down (2D)
+        Scale: 40
+        Target Frame: map
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 900
+  Width: 1400

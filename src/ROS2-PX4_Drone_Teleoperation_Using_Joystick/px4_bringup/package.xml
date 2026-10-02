@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>px4_bringup</name>
+  <version>0.0.1</version>
+  <description>Complete bringup package for PX4 with ROS2</description>
+  <maintainer email="kutkarsh706@gmail.com">Utkarsh</maintainer>
+  <license>BSD</license>
+
+  <depend>rclpy</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>px4_msgs</depend>
+
+  <exec_depend>px4_offboard</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

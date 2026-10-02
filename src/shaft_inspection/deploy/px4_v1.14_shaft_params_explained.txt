@@ -1,0 +1,66 @@
+
+GPS denied
+  EKF2_GPS_CTRL      = 0        
+  SYS_HAS_GPS        = 0        set 1 if a GPS is fitted for surface flights
+  COM_ARM_WO_GPS     = 1        
+
+Holybro H-Flow over DroneCAN
+  UAVCAN_ENABLE      = 2        sensors, auto config
+  UAVCAN_SUB_FLOW    = 1        
+  UAVCAN_SUB_RNG     = 1        
+
+Optical flow: position hold near a surface only
+  EKF2_OF_CTRL       = 1        
+  EKF2_OF_QMIN       = 1        
+  EKF2_OF_POS_X      = 0.0      MEASURE: flow sensor offset from CoG, FRD, metres
+  EKF2_OF_POS_Y      = 0.0      MEASURE
+  EKF2_OF_POS_Z      = 0.06     MEASURE
+  SENS_FLOW_MINHGT   = 0.08     
+  SENS_FLOW_MAXHGT   = 5.0      flow ignored above this; needs light + texture
+  SENS_FLOW_MAXR     = 7.4      PAA3905 limit
+  EKF2_TERR_MASK     = 3        terrain from range + flow
+
+Height: baro reference, ToF for terrain (see README 'Height, terrain and the collar edge')
+  EKF2_BARO_CTRL     = 1        
+  EKF2_HGT_REF       = 0        v1.14 DEFAULT IS GPS (1) - must change
+  EKF2_RNG_CTRL      = 1        conditional
+  EKF2_RNG_A_HMAX    = 3.0      
+  EKF2_RNG_A_VMAX    = 1.0      
+  EKF2_MIN_RNG       = 0.08     
+  EKF2_RNG_NOISE     = 0.03     
+  EKF2_RNG_SFE       = 0.05     
+  EKF2_RNG_POS_X     = 0.0      MEASURE
+  EKF2_RNG_POS_Y     = 0.0      MEASURE
+  EKF2_RNG_POS_Z     = 0.06     MEASURE
+
+Horizontal position from the lidar bore-centre fix (external vision)
+  EKF2_EV_CTRL       = 1        horizontal position ONLY. v1.14 DEFAULT IS 15 - must change
+  EKF2_EV_DELAY      = 50.0     TUNE: lidar scan + processing latency, ms
+  EKF2_EV_NOISE_MD   = 0        use message variances
+  EKF2_EVP_NOISE     = 0.05     
+  EKF2_EVP_GATE      = 5.0      
+  EKF2_EV_QMIN       = 0        
+
+Magnetometer: fine at the surface; unreliable underground (see README Known gaps)
+  EKF2_MAG_TYPE      = 0        
+
+Collision Prevention for Position mode (pilot flying)
+  CP_DIST            = 0.6      
+  CP_DELAY           = 0.4      
+  CP_GUIDE_ANG       = 30.0     
+  CP_GO_NO_DATA      = 0        
+
+Confined-space limits
+  MPC_XY_VEL_MAX     = 1.0      
+  MPC_XY_CRUISE      = 0.8      
+  MPC_VEL_MANUAL     = 0.8      
+  MPC_Z_VEL_MAX_DN   = 0.6      
+  MPC_Z_VEL_MAX_UP   = 1.0      
+  MPC_TILTMAX_AIR    = 20.0     
+
+Failsafes
+  COM_OF_LOSS_T      = 1.0      Offboard stream timeout, s
+  COM_OBL_RC_ACT     = 1        Offboard lost -> ALTITUDE mode (holds baro height). Land(4) would sink into the shaft
+  COM_RCL_EXCEPT     = 4        ignore RC loss while in Offboard (no RC underground)
+  NAV_DLL_ACT        = 0        no GCS link underground
+  COM_RC_OVERRIDE    = 3        sticks take over in auto AND offboard. v1.14 DEFAULT (1) = auto only - must change

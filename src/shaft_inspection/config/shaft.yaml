@@ -1,0 +1,75 @@
+/**:
+  ros__parameters:
+    use_sim_time: true
+
+shaft_perception:
+  ros__parameters:
+    use_sim_time: true
+    scan_topic: /scan
+    n_sectors: 36
+    min_coverage: 0.85          # below this the bore fix is refused, not guessed
+    search_window: 6.0          # upper bound only; raster sizes itself to the scan
+    min_clearance_valid: 0.35
+    max_clearance_valid: 8.0
+    roundness_for_radius: 0.93  # circle fit reported only when the bore is round
+    repulse_influence: 1.0
+    repulse_gain: 0.35
+    repulse_max: 0.6
+    anchor_samples: 30
+    publish_ev: true
+    self_filter_radius: 0.25   # drop returns off the airframe itself (measure on the real vehicle)
+
+shaft_mission:
+  ros__parameters:
+    use_sim_time: true
+    control_hz: 20.0
+    # --- centring (layer 1) ---
+    kp_lateral: 1.2
+    kd_lateral: 0.45
+    max_lateral_speed: 0.6
+    center_tol: 0.12
+    center_settle_speed: 0.15
+    # --- vertical ---
+    descend_speed: 0.35
+    ascend_speed: 0.5
+    takeoff_clearance: 1.0
+    kp_vertical: 0.6
+    max_vertical_speed: 0.8
+    # --- mission ---
+    bottom_range: 0.5          # turn around this far above the floor (no landing)
+    slowdown_range: 2.5        # brake from here down to bottom_range
+    bottom_confirm_n: 3        # consecutive 20 Hz ticks
+    # --- depth: NOT required in advance ---
+    # The vehicle descends until the ToF finds the floor, or until the return
+    # budget says it must climb, whichever comes first.
+    max_depth: 0.0             # 0 = no limit.  >0 = turn around there (never an abort)
+    mission_timeout: 0.0       # 0 = off.  >0 = hard ABORT, last resort
+    battery_reserve: 0.30      # battery fraction to have left back at the mouth
+    return_margin: 1.5         # safety factor on the estimated climb
+    exit_buffer_s: 60.0        # time for the pilot to fly home and land after DONE
+    drain_window_s: 60.0       # battery drain-rate estimation window
+    flight_time_budget_s: 0.0  # usable endurance from arming (fallback when no battery data); 0 = off
+    # --- avoidance (layers 2 and 3) ---
+    use_repulsion: true
+    auto_descend: true
+    # start_mode is NOT set here: pass it to the launch file (start_mode:=...)
+    # so there is exactly one source of truth.
+    # Distances are from the LIDAR CENTRE.  The x500's prop tips reach ~0.38 m,
+    # so anything below that is already contact.
+    stop_dist: 0.65             # velocity clamp brakes to stop here
+    critical_dist: 0.45         # abort: ~7 cm of margin beyond the props
+    descent_min_clearance: 0.60 # no sinking with a wall closer than this
+    center_hold_s: 1.5
+    brake_delay: 0.4
+    brake_decel: 1.0
+    n_sectors: 36
+    scan_timeout: 0.5
+
+shaft_mapper:
+  ros__parameters:
+    use_sim_time: true
+    scan_topic: /scan
+    slice_thickness: 0.10
+    min_depth_step: 0.05
+    publish_cloud: true
+    self_filter_radius: 0.25

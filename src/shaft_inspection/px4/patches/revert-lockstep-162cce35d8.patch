@@ -1,0 +1,181 @@
+diff --git a/platforms/posix/src/px4/common/lockstep_scheduler/include/lockstep_scheduler/lockstep_scheduler.h b/platforms/posix/src/px4/common/lockstep_scheduler/include/lockstep_scheduler/lockstep_scheduler.h
+index 50ae8e3dfa..711fd8d897 100644
+--- a/platforms/posix/src/px4/common/lockstep_scheduler/include/lockstep_scheduler/lockstep_scheduler.h
++++ b/platforms/posix/src/px4/common/lockstep_scheduler/include/lockstep_scheduler/lockstep_scheduler.h
+@@ -86,7 +86,7 @@ private:
+ 		pthread_cond_t *passed_cond{nullptr};
+ 		pthread_mutex_t *passed_lock{nullptr};
+ 		uint64_t time_us{0};
+-		std::atomic<bool> timeout{false};
++		bool timeout{false};
+ 		std::atomic<bool> done{false};
+ 		std::atomic<bool> removed{true};
+ 
+@@ -98,7 +98,6 @@ private:
+ 	std::atomic<uint64_t> _time_us{0};
+ 
+ 	TimedWait *_timed_waits{nullptr}; ///< head of linked list
+-	std::mutex _timed_waits_mutex;   ///< protects _timed_waits linked list
+-	std::mutex _broadcast_mutex;     ///< protects the broadcast phase in set_absolute_time()
++	std::mutex _timed_waits_mutex;
+ 	std::atomic<bool> _setting_time{false}; ///< true if set_absolute_time() is currently being executed
+ };
+diff --git a/platforms/posix/src/px4/common/lockstep_scheduler/src/lockstep_scheduler.cpp b/platforms/posix/src/px4/common/lockstep_scheduler/src/lockstep_scheduler.cpp
+index 486ddcfe86..04f14a4962 100644
+--- a/platforms/posix/src/px4/common/lockstep_scheduler/src/lockstep_scheduler.cpp
++++ b/platforms/posix/src/px4/common/lockstep_scheduler/src/lockstep_scheduler.cpp
+@@ -55,18 +55,6 @@ void LockstepScheduler::set_absolute_time(uint64_t time_us)
+ 
+ 	_time_us = time_us;
+ 
+-	// Collect entries that need wakeup while holding _timed_waits_mutex,
+-	// then broadcast outside of it to avoid lock-order-inversion with
+-	// cond_timedwait() (which holds passed_lock while acquiring _timed_waits_mutex).
+-	struct WakeUp {
+-		pthread_cond_t *cond;
+-		pthread_mutex_t *lock;
+-	};
+-
+-	static constexpr int MAX_WAKEUPS = 32;
+-	WakeUp wakeups[MAX_WAKEUPS];
+-	int num_wakeups = 0;
+-
+ 	{
+ 		std::unique_lock<std::mutex> lock_timed_waits(_timed_waits_mutex);
+ 		_setting_time = true;
+@@ -93,29 +81,17 @@ void LockstepScheduler::set_absolute_time(uint64_t time_us)
+ 
+ 			if (timed_wait->time_us <= time_us &&
+ 			    !timed_wait->timeout) {
+-				// Mark as timed out and collect for broadcast
++				// We are abusing the condition here to signal that the time
++				// has passed.
++				pthread_mutex_lock(timed_wait->passed_lock);
+ 				timed_wait->timeout = true;
+-
+-				if (num_wakeups < MAX_WAKEUPS) {
+-					wakeups[num_wakeups++] = {timed_wait->passed_cond, timed_wait->passed_lock};
+-				}
++				pthread_cond_broadcast(timed_wait->passed_cond);
++				pthread_mutex_unlock(timed_wait->passed_lock);
+ 			}
+ 
+ 			timed_wait_prev = timed_wait;
+ 			timed_wait = timed_wait->next;
+ 		}
+-	}
+-
+-	// Broadcast under _broadcast_mutex (not _timed_waits_mutex) so that
+-	// locking passed_lock here doesn't create an ordering cycle.
+-	{
+-		std::lock_guard<std::mutex> lock_broadcast(_broadcast_mutex);
+-
+-		for (int i = 0; i < num_wakeups; ++i) {
+-			pthread_mutex_lock(wakeups[i].lock);
+-			pthread_cond_broadcast(wakeups[i].cond);
+-			pthread_mutex_unlock(wakeups[i].lock);
+-		}
+ 
+ 		_setting_time = false;
+ 	}
+@@ -125,7 +101,7 @@ int LockstepScheduler::cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *loc
+ {
+ 	// A TimedWait object might still be in timed_waits_ after we return, so its lifetime needs to be
+ 	// longer. And using thread_local is more efficient than malloc.
+-	static thread_local TimedWait timed_wait{};
++	static thread_local TimedWait timed_wait;
+ 	{
+ 		std::lock_guard<std::mutex> lock_timed_waits(_timed_waits_mutex);
+ 
+@@ -168,13 +144,9 @@ int LockstepScheduler::cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *loc
+ 		// deadlock due to a different locking order in set_absolute_time().
+ 		// Note that this case does not happen too frequently, and thus can be
+ 		// a bit more expensive.
+-		// We wait for both the iteration phase (_timed_waits_mutex) and the
+-		// broadcast phase (_broadcast_mutex) to complete.
+ 		pthread_mutex_unlock(lock);
+ 		_timed_waits_mutex.lock();
+ 		_timed_waits_mutex.unlock();
+-		_broadcast_mutex.lock();
+-		_broadcast_mutex.unlock();
+ 		pthread_mutex_lock(lock);
+ 	}
+ 
+diff --git a/platforms/posix/src/px4/common/lockstep_scheduler/test/src/lockstep_scheduler_test.cpp b/platforms/posix/src/px4/common/lockstep_scheduler/test/src/lockstep_scheduler_test.cpp
+index 7b7066484f..1542aadc90 100644
+--- a/platforms/posix/src/px4/common/lockstep_scheduler/test/src/lockstep_scheduler_test.cpp
++++ b/platforms/posix/src/px4/common/lockstep_scheduler/test/src/lockstep_scheduler_test.cpp
+@@ -65,12 +65,11 @@ void test_condition_timing_out()
+ 	ls.set_absolute_time(some_time_us);
+ 
+ 	std::atomic<bool> should_have_timed_out{false};
++	pthread_mutex_lock(&lock);
+ 
+-	// The thread that calls cond_timedwait must also lock the mutex,
+-	// otherwise set_absolute_time() would re-lock the main thread's
+-	// own mutex in its broadcast phase, causing a deadlock.
++	// Use a thread to wait for condition while we already have the lock.
++	// This ensures the synchronization happens in the right order.
+ 	TestThread thread([&ls, &cond, &lock, &should_have_timed_out]() {
+-		pthread_mutex_lock(&lock);
+ 		EXPECT_EQ(ls.cond_timedwait(&cond, &lock, some_time_us + 1000), ETIMEDOUT);
+ 		EXPECT_TRUE(should_have_timed_out);
+ 		// It should be re-locked afterwards, so we should be able to unlock it.
+@@ -101,25 +100,17 @@ void test_locked_semaphore_getting_unlocked()
+ 	LockstepScheduler ls;
+ 	ls.set_absolute_time(some_time_us);
+ 
+-	std::atomic<bool> thread_locked{false};
++	pthread_mutex_lock(&lock);
++	// Use a thread to wait for condition while we already have the lock.
++	// This ensures the synchronization happens in the right order.
++	TestThread thread([&ls, &cond, &lock]() {
+ 
+-	// The thread locks the mutex itself (POSIX requires the calling thread
+-	// to own the mutex passed to pthread_cond_wait).
+-	TestThread thread([&ls, &cond, &lock, &thread_locked]() {
+-		pthread_mutex_lock(&lock);
+-		thread_locked = true;
+ 		ls.set_absolute_time(some_time_us + 500);
+ 		EXPECT_EQ(ls.cond_timedwait(&cond, &lock, some_time_us + 1000), 0);
+ 		// It should be re-locked afterwards, so we should be able to unlock it.
+ 		EXPECT_EQ(pthread_mutex_unlock(&lock), 0);
+ 	});
+ 
+-	// Wait until thread has locked the mutex. Our pthread_mutex_lock below
+-	// will then block until cond_timedwait releases it via pthread_cond_wait.
+-	while (!thread_locked) {
+-		std::this_thread::yield();
+-	}
+-
+ 	pthread_mutex_lock(&lock);
+ 	pthread_cond_broadcast(&cond);
+ 	pthread_mutex_unlock(&lock);
+@@ -151,9 +142,8 @@ public:
+ 
+ 	void run()
+ 	{
++		pthread_mutex_lock(&_lock);
+ 		_thread = std::make_shared<TestThread>([this]() {
+-			pthread_mutex_lock(&_lock);
+-			_thread_ready = true;
+ 			_result = _ls.cond_timedwait(&_cond, &_lock, _timeout);
+ 			pthread_mutex_unlock(&_lock);
+ 		});
+@@ -173,7 +163,7 @@ public:
+ 
+ 	void check()
+ 	{
+-		if (_is_done || !_thread_ready) {
++		if (_is_done) {
+ 			return;
+ 		}
+ 
+@@ -208,7 +198,6 @@ private:
+ 	pthread_mutex_t _lock;
+ 	LockstepScheduler &_ls;
+ 	std::atomic<bool> _is_done{false};
+-	std::atomic<bool> _thread_ready{false};
+ 	std::atomic<int> _result {INITIAL_RESULT};
+ 	std::shared_ptr<TestThread> _thread{};
+ };
