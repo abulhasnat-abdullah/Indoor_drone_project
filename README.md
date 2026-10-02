@@ -126,6 +126,8 @@ Total recorded procurement cost: about **139,590 BDT**.
 ```
 .
 ├── drone_gcs.py                 # Browser-based Ground Control launcher (port 8080)
+├── web_teleop.py                # Web teleop dashboard: MJPEG video, joystick/D-pad/keys (port 8000)
+├── TECHNICAL_HANDBOOK.md        # Workspace technical handbook
 ├── run_cmds/
 │   ├── slam.sh                  # Brings up the LiDAR-anchored localization chain in order
 │   └── drone3d.rviz             # RViz2 config for 2D/3D mapping
